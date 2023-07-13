@@ -24,11 +24,10 @@ KEY = secrets["api-key"]
 SECRET = secrets["secret"]
 
 SIZES = ["url_o", "url_k", "url_h", "url_l", "url_c"]  # in order of preference
+flickr = FlickrAPI(KEY, SECRET, format="parsed-json")
 
 
 def get_photos(image_tag, page=1, per_page=100):
-    flickr = FlickrAPI(KEY, SECRET, format="parsed-json")
-
     return flickr.photos.search(
         text=image_tag,
         tag_mode="all",
@@ -49,7 +48,6 @@ def get_url(photo):
 
 def get_urls(image_tag, n_images):
     n_pages = get_photos(image_tag)["photos"]["pages"]
-
     counter = 0
     urls = []
 
@@ -75,12 +73,18 @@ def get_urls(image_tag, n_images):
     return urls
 
 
-def dowload(url, out, pbar=None):
+def download(url, out_dir, pbar=None):
     response = requests.get(url)
     img = Image.open(BytesIO(response.content))
     # convert to RGB
     img = img.convert("RGB")
-    img.save(out)
+
+    out = os.path.join(out_dir, os.path.basename(url))
+
+    if 'exif' in img.info.keys():
+        img.save(out, exif=img.info['exif'])
+    else:
+        img.save(out)
 
     if pbar:
         pbar.update(1)
@@ -106,7 +110,7 @@ if not os.path.exists(out_dir):
 pbar = tqdm(total=len(urls))
 with concurrent.futures.ThreadPoolExecutor(args.num_workers) as executor:
     futures = [
-        executor.submit(dowload, url, os.path.join(out_dir, f"{i}.jpg"), pbar)
+        executor.submit(download, url, out_dir, pbar)
         for i, url in enumerate(urls)
     ]
 
